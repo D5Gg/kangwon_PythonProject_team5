@@ -120,8 +120,12 @@ def crawl_stock_top10() -> None:
     sleep(1)
     
     hrefs = [link.get_attribute("href") for link in links]
+    
+    result = []
 
     for idx, link_elem in enumerate(links):
+        
+        temp_stock = {}
         
         print(f"\n[{idx}] 주식 상세 정보:")
         sleep(0.5)
@@ -138,6 +142,7 @@ def crawl_stock_top10() -> None:
         if stock_name_elem:
             stock_name = stock_name_elem.text.strip()
             print(f"주식 이름: {stock_name}")
+            temp_stock["주식 이름"] = stock_name
         else:
             print("주식 이름을 찾을 수 없습니다.")
         
@@ -146,6 +151,7 @@ def crawl_stock_top10() -> None:
         if price_elem:
             current_price = price_elem.text.strip()
             print(f"현재가: {current_price}")
+            temp_stock["현재가"] = current_price
         else:
             print("현재가를 찾을 수 없습니다.")
             
@@ -157,16 +163,18 @@ def crawl_stock_top10() -> None:
             print("[주식 정보]")
             for k, v in zip(keys, values):
                 print(f"{k.text.strip()}: {v.text.strip()}")
+            [temp_stock.update({k.text.strip(): v.text.strip()}) for k, v in zip(keys, values)]
         else:
             print("변수 정보 또는 값을 찾을 수 없습니다.")
 
-        sleep(1)  # 잠시 대기
+        result.append(temp_stock)
+        sleep(0.5)  # 잠시 대기
         
         driver.back()  # 이전 페이지로 돌아가기
         sleep(2)
         
     driver.quit()
-    return
+    return result
 
 if __name__ == "__main__":
     # 주식 이름으로 크롤링
