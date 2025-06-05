@@ -1,4 +1,5 @@
 from django.http import HttpResponse, HttpRequest
+from django.shortcuts import render
 from stocks.models import Stock
 from stocks.crawling import crawl_stock_top10
 
@@ -28,6 +29,6 @@ def index(request: HttpRequest) -> HttpResponse:
     return HttpResponse(result)
 
 def mainPage(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("<h1>메인 페이지</h1><p>여기는 주식 사이트의 메인 페이지입니다.</p>")
-                        
-    
+    return render(request, "main.html")
+
+

@@ -5,11 +5,15 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from time import sleep
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 stock_name = "삼성전자"
 
 def crawl_stock_by_name(stock_name:str) -> None:
-    driver = webdriver.Chrome()
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    
     driver.get("https://m.stock.naver.com/")
     sleep(2)  # 페이지 로딩 대기
     
@@ -99,7 +103,9 @@ def crawl_stock_by_name(stock_name:str) -> None:
     return
 
 def crawl_stock_top10() -> None:
-    driver = webdriver.Chrome()
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    
     driver.get("https://m.stock.naver.com/")
     sleep(2)  # 페이지 로딩 대기
     
