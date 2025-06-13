@@ -20,7 +20,7 @@
   <body class="sb-nav-fixed">
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
       <!-- Navbar Brand-->
-      <a class="navbar-brand ps-3" href="index.html">Start Bootstrap</a>
+      <a class="navbar-brand ps-3" href="{% url 'index' %}">Start Bootstrap</a>
       <!-- Sidebar Toggle-->
       <button
         class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0"
@@ -106,10 +106,10 @@
                 data-bs-parent="#sidenavAccordion"
               >
                 <nav class="sb-sidenav-menu-nested nav">
-                  <a class="nav-link" href="layout-static.html"
+                  <a class="nav-link" href="{% url 'layout_static' %}"
                     >Static Navigation</a
                   >
-                  <a class="nav-link" href="layout-sidenav-light.html"
+                  <a class="nav-link" href="{% url 'layout_sidenav_light' %}"
                     >Light Sidenav</a
                   >
                 </nav>
@@ -160,10 +160,12 @@
                     data-bs-parent="#sidenavAccordionPages"
                   >
                     <nav class="sb-sidenav-menu-nested nav">
-                      <a class="nav-link" href="login.html">Login</a>
-                      <a class="nav-link" href="register.html">Register</a>
-                      <a class="nav-link" href="password.html"
-                        >Forgot Password</a
+                      <a class="nav-link" href="{% url 'login' %}">Login</a>
+                      <a class="nav-link" href="{% url 'register' %}"
+                        >Register</a
+                      >
+                      <a class="nav-link" href=""
+                        >Forgot Password >Forgot Password</a
                       >
                     </nav>
                   </div>
@@ -187,22 +189,31 @@
                     data-bs-parent="#sidenavAccordionPages"
                   >
                     <nav class="sb-sidenav-menu-nested nav">
-                      <a class="nav-link" href="401.html">401 Page</a>
-                      <a class="nav-link" href="404.html">404 Page</a>
-                      <a class="nav-link" href="500.html">500 Page</a>
+                      <a class="nav-link" href="{% url 'error_401' %}"
+                        >401 Page</a
+                      >
+                      <a class="nav-link" href="{% url 'error_404' %}"
+                        >404 Page</a
+                      >
+                      <a class="nav-link" href="{% url 'error_500' %}"
+                        >500 Page</a
+                      >
                     </nav>
                   </div>
                 </nav>
               </div>
               <div class="sb-sidenav-menu-heading">Addons</div>
-              <a class="nav-link" href="charts.html">
+              <a class="nav-link" href="{% url 'charts' %}">
                 <div class="sb-nav-link-icon">
                   <i class="fas fa-chart-area"></i>
                 </div>
                 Charts
               </a>
-              <a class="nav-link" href="tables.html">
-                <div class="sb-nav-link-icon"><i class="fas fa-table"></i></div>
+
+              <a class="nav-link" href="{% url 'tables' %}">
+                <div class="sb-nav-link-icon">
+                  <i class="fas fa-table"></i>
+                </div>
                 Tables
               </a>
             </div>
