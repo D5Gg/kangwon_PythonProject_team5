@@ -1,7 +1,7 @@
 # team5project/index/views.py
 from django.shortcuts import render, redirect
-from .models import Note # index 앱의 Note 모델
-from .stockModel import StockModel # index 앱의 StockModel 모델
+from .models import Note
+from .stockModel import StockModel, SearchLog # index 앱의 StockModel 모델
 from django.views.generic import ListView
 from django.db import transaction # 트랜잭션 임포트
 from .utils import get_kospi_basic_info, get_kospi_realtime_data
@@ -21,9 +21,9 @@ from tensorflow.keras.layers import LSTM, Dense
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
-
-
 import json
+
+
 
 # crawling.py에 있는 함수를 임포트합니다.
 from .crawling import get_and_display_stocks_data_and_save
@@ -37,11 +37,8 @@ def index(request):
 
 
 def charts(request):
-    # This view is not directly used for the charts on index.html,
-    # but could be for a dedicated charts page if needed.
-    return render(request, 'index/charts.html')
     # 모든 주식 데이터 (차트, 표 등에서 사용)
-    stocks = StockModel.objects.all().order_by('-accumulated_trading_volume')
+    stocks = StockModel.objects.all().order_by('-accumulated_trading_volume')[:200]
 
     # 거래량/거래대금 numeric 변환
     def to_int(val):
@@ -115,20 +112,6 @@ def charts(request):
         "value_bin_counts_json": json.dumps(value_bin_counts),
     })
 
-def error_401(request):
-    return render(request, 'index/401.html')
-
-def error_404(request):
-    return render(request, 'index/404.html')
-
-def error_500(request):
-    return render(request, 'index/500.html')
-
-def layout_sidenav_light(request):
-    return render(request, 'index/layout-sidenav-light.html')
-
-def layout_static(request):
-    return render(request, 'index/layout-static.html')
 
 def login(request):
     return render(request, 'index/login.html')
@@ -145,13 +128,16 @@ def tables(request):
 def stock_detail(request):
     return render(request, 'index/stock_detail.html')
 
+def search_log_list(request):
+    logs = SearchLog.objects.all().order_by('-searched_at')
+    return render(request, 'index/search_log_list.html', {'logs': logs})  # ← 경로 수정
+
 
 # 주식 목록을 보여주는 클래스 기반 뷰 (주요 변경 사항)
 class StockListView(ListView):
     model = StockModel
     template_name = 'index/index.html'
     context_object_name = 'stocks_page' # 템플릿 변수 이름을 'stocks_page'로 통일
-    # paginate_by = 20  # 이 줄을 제거하여 모든 데이터 표시
 
     def dispatch(self, request, *args, **kwargs):
         # 페이지가 로드될 때마다 최신 주식 데이터를 가져와 DB에 저장/업데이트
@@ -357,21 +343,25 @@ def get_daily_stock_prices(code, pages=10): # 최근 10페이지의 데이터를
 
 
 def search_stock_api(request):
-    stock_name = request.GET.get('stock_name')
-    
+    stock_name = request.GET.get('stock_name', '').strip()
+
     if not stock_name:
         return JsonResponse({'error': '주식 이름을 입력해주세요.'}, status=400)
 
-    # 만약 6자리 숫자이면 그대로 종목 코드로 사용
+    # 검색 로그 저장
+    SearchLog.objects.create(stock_name=stock_name)
+
+    # 6자리 숫자인 경우 그대로 종목 코드로 사용
     if stock_name.isdigit() and len(stock_name) == 6:
         return JsonResponse({'code': stock_name})
 
-    # 한글 이름이면 종목코드로 변환 시도
+    # 한글 종목 이름인 경우 코드 변환 시도
     code = get_stock_code_by_name(stock_name)
     if code:
         return JsonResponse({'code': code})
     else:
         return JsonResponse({'error': '해당 종목을 찾을 수 없습니다.'}, status=404)
+
 
 def stock_detail(request):
     stock_code = request.GET.get('code')

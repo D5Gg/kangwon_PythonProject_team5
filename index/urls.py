@@ -2,15 +2,14 @@
 from django.urls import path
 from .views import (
     # index, # 'index' 뷰를 직접 사용하지 않는다면 주석 처리하거나 제거하세요.
-    charts, error_401, error_404, error_500,
-    layout_sidenav_light, layout_static,
+    charts, 
     login, password, register, tables,
     # kospi_data_page,  # 이 줄을 제거합니다.
     kospi_basic_api,
     kospi_realtime_api,
-    layout_sidenav_light,
     stock_detail,
     search_stock_api,
+    search_log_list,
     # industry_chart_page, # 이 줄을 제거합니다.
     StockListView
 )
@@ -21,15 +20,6 @@ urlpatterns = [
 
     # 'charts.html'이라는 별도의 차트 페이지가 여전히 필요하다면 유지합니다.
     path('charts/', charts, name='charts'),
-
-    # 에러 페이지들
-    path('401/', error_401, name='error_401'),
-    path('404/', error_404, name='error_404'),
-    path('500/', error_500, name='error_500'),
-
-    # 레이아웃 페이지들
-    path('layout-sidenav-light/', layout_sidenav_light, name='layout-sidenav-light'),
-    path('layout-static/', layout_static, name='layout_static'),
 
     # 인증 관련 페이지들
     path('login/', login, name='login'),
@@ -47,4 +37,5 @@ urlpatterns = [
     path('api/search-stock/', search_stock_api, name='search_stock_api'), # <--- 이 줄을 수정
     path('stock_detail/', stock_detail, name='stock_detail'),
     path('stock.html/', stock_detail, name='stock_detail'),
+    path('search_logs.html/', search_log_list, name='search_log_list'),
 ]

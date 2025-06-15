@@ -41,3 +41,10 @@ def parse_krw_hangeul(value):
     except ValueError:
         return 0
 
+
+class SearchLog(models.Model):
+    stock_name = models.CharField(max_length=100)
+    searched_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.stock_name} searched at {self.searched_at}"

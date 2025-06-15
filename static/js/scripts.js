@@ -24,28 +24,5 @@ window.addEventListener("DOMContentLoaded", (event) => {
     button.click();         // 버튼 클릭 함수 트리거
   });
 
-  button.addEventListener("click", async () => {
-    const stockName = input.value.trim();
-    if (!stockName) {
-      alert("주식 이름을 입력해주세요.");
-      return;
-    }
-    try {
-      const response = await fetch(`/api/search-stock/?stock_name=${encodeURIComponent(stockName)}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        alert(errorData.error || "검색 중 오류가 발생했습니다.");
-        return;
-      }
-      const data = await response.json();
-      if (data.code) {
-        window.location.href = `/stock.html/?code=${data.code}`;
-      } else {
-        alert("해당 종목을 찾을 수 없습니다.");
-      }
-    } catch (err) {
-      console.error("검색 중 오류 발생:", err);
-      alert("검색 중 오류가 발생했습니다.");
-    }
-  });
+
 });
