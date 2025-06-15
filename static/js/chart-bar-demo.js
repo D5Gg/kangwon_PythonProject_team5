@@ -1,65 +1,60 @@
 document.addEventListener("DOMContentLoaded", function () {
-  const scriptTag = document.getElementById("industryData");
-  if (!scriptTag) {
-    console.error("Error: 'industryData' script element not found!");
+  const ctx = document.getElementById("industryBarChart"); // Get the canvas element
+
+  // JSON 텍스트를 가져와서 파싱
+  const jsonDataElement = document.getElementById("industryData");
+  if (!jsonDataElement) {
+    console.error("Element with ID 'industryData' not found.");
     return;
   }
+  const jsonData = jsonDataElement.textContent;
 
   let chartData;
   try {
-    chartData = JSON.parse(scriptTag.textContent);
+    chartData = JSON.parse(jsonData);
   } catch (e) {
-    console.error("Error parsing JSON data:", e);
+    console.error("JSON 파싱 실패:", e);
     return;
   }
 
-  console.log("chartData:", chartData);
-  // 방어코드 예시
-  if (!chartData.values || !Array.isArray(chartData.values)) {
-    console.error("chartData.values is not iterable");
-  } else {
-    const minValue = Math.min(...chartData.values);
-    console.log("Minimum value:", minValue);
+  console.log("chartData (parsed from Django context):", chartData);
+
+  // Check if 'groups' array exists within the parsed data
+  if (!chartData || !Array.isArray(chartData.groups)) {
+    console.error("chartData.groups is not an array or chartData is null/undefined.");
+    return;
   }
 
-  // Get the canvas element context
-  const ctx = document.getElementById("industryBarChart").getContext("2d");
+  // Extract labels (industry names) and values (change rates) from the 'groups' array
+  const labels = chartData.groups.map(g => g.name);
+  const values = chartData.groups.map(g => parseFloat(g.changeRate)); // Convert string to float
 
-  // Check if the canvas context was successfully retrieved
-  if (!ctx) {
-    console.error(
-      "Error: Could not get 2D context for 'industryBarChart' canvas."
-    );
-    return; // Exit if canvas context is unavailable
+  // Ensure there's data to chart
+  if (labels.length === 0 || values.length === 0) {
+    console.warn("No data available for the bar chart.");
+    return;
   }
 
-  // Create a new bar chart using Chart.js
   new Chart(ctx, {
-    type: "bar", // Set chart type to bar
+    type: "bar",
     data: {
-      labels: chartData.labels, // Labels for the x-axis (industry names)
-      datasets: [
-        {
-          label: "Change Rate (%)", // Label for the dataset
-          backgroundColor: "rgba(2, 117, 216, 0.7)", // Bar fill color
-          borderColor: "rgba(2, 117, 216, 1)", // Bar border color
-          borderWidth: 1, // Border width
-          data: chartData.values, // Data values for the bars
-        },
-      ],
+      labels: labels,
+      datasets: [{
+        label: "Change Rate (%)",
+        backgroundColor: "rgba(2, 117, 216, 0.7)",
+        borderColor: "rgba(2, 117, 216, 1)",
+        borderWidth: 1,
+        data: values,
+      }],
     },
     options: {
-      responsive: true, // Make the chart responsive
-      maintainAspectRatio: false, // Allow canvas to resize freely based on container
+
       scales: {
         y: {
-          beginAtZero: true, // Start y-axis at zero
-          // Dynamically set min/max for y-axis based on data values
-          min:
-            Math.min(...chartData.values) < 0
-              ? Math.min(...chartData.values) * 1.1
-              : 0,
-          max: Math.max(...chartData.values) * 1.1,
+          beginAtZero: true,
+          // Dynamically set min/max for better visualization, handling negative values
+          min: Math.min(...values) < 0 ? Math.min(...values) * 1.1 : 0,
+          max: Math.max(...values) > 0 ? Math.max(...values) * 1.1 : 0, // Adjust max if all values are zero or negative
           title: {
             display: true,
             text: "Change Rate (%)",
@@ -74,27 +69,22 @@ document.addEventListener("DOMContentLoaded", function () {
       },
       plugins: {
         legend: {
-          display: true, // Display the legend
-          position: "top", // Position the legend at the top
-          labels: {
-            font: {
-              size: 14, // Adjust legend font size
-            },
-          },
+          display: true,
+          position: "top",
+          labels: { font: { size: 14 } },
         },
         tooltip: {
           callbacks: {
-            label: function (context) {
-              return context.dataset.label + ": " + context.parsed.y + "%";
-            },
+            label: context => `${context.dataset.label}: ${context.parsed.y}%`,
           },
         },
       },
-      // Add animation for a smoother appearance
       animation: {
-        duration: 1500, // Animation duration in milliseconds
-        easing: "easeInOutQuad", // Easing function for animation
+        duration: 1500,
+        easing: "easeInOutQuad",
       },
+      responsive: true, // Make the chart responsive
+      maintainAspectRatio: false, // Allow the chart to resize based on parent container
     },
   });
 });
