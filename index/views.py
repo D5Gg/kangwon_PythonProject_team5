@@ -30,7 +30,8 @@ def index(request):
 
 
 def charts(request):
-    stocks = StockModel.objects.all()
+    # StockListView와 동일하게 거래량 내림차순 200개(혹은 전체)로 통일
+    stocks = StockModel.objects.all().order_by('-accumulated_trading_volume')[:200]
     print(stocks)  # 데이터가 실제로 있는지 확인
     return render(request, "index/charts.html", {"stocks": stocks})
 
@@ -67,7 +68,7 @@ class StockListView(ListView):
     model = StockModel
     template_name = 'index/index.html'
     context_object_name = 'stocks_page' # 템플릿 변수 이름을 'stocks_page'로 통일
-    paginate_by = 20 # 한 페이지에 20개씩 보여주기
+    # paginate_by = 20  # 이 줄을 제거하여 모든 데이터 표시
 
     # 이 메소드가 뷰가 렌더링되기 전에 호출됩니다.
     def dispatch(self, request, *args, **kwargs):
