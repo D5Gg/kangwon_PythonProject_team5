@@ -5,6 +5,7 @@ import json
 import time
 from django.db import transaction
 from .stockModel import StockModel # index 앱의 StockModel 임포트
+from .stockModel import parse_krw_hangeul # 거래대금 변환 함수 임포트
 
 # 함수 이름을 변경하여 역할이 명확해지도록 했습니다.
 def get_and_display_stocks_data_and_save(): # request 인자는 더 이상 필요 없습니다.
@@ -67,7 +68,8 @@ def get_and_display_stocks_data_and_save(): # request 인자는 더 이상 필�
                         'compare_to_previous_close_price': stock_item.get("compareToPreviousClosePrice"),
                         'fluctuations_ratio': stock_item.get("fluctuationsRatio"),
                         'accumulated_trading_volume': stock_item.get("accumulatedTradingVolume"),
-                        'accumulated_trading_value_krw_hangeul': stock_item.get("accumulatedTradingValueKrwHangeul"),
+                        # 거래대금(억) 단위의 한글 표현을 정수로 변환하여 저장
+                        'accumulated_trading_value_krw_hangeul': parse_krw_hangeul(stock_item.get("accumulatedTradingValueKrwHangeul")),
                     }
                 )
                 saved_count += 1

@@ -30,7 +30,9 @@ def index(request):
 
 
 def charts(request):
-    return render(request, 'index/charts.html')
+    stocks = StockModel.objects.all()
+    print(stocks)  # 데이터가 실제로 있는지 확인
+    return render(request, "index/charts.html", {"stocks": stocks})
 
 def error_401(request):
     return render(request, 'index/401.html')

@@ -21,3 +21,23 @@ class StockModel(models.Model):
 
     def __str__(self):
         return self.stock_name if self.stock_name else self.item_code
+
+
+# 거래대금 (억) 단위의 한글 표현을 정수로 변환하는 함수
+# 저장 시 --> stock.accumulated_trading_value_krw_hangeul = parse_krw_hangeul(원본값)
+# 예 : "1,234억원" -> 123400000000
+def parse_krw_hangeul(value):
+    if value is None:
+        return 0
+    value = str(value).replace(',', '').replace(' ', '')
+    if value.endswith('억원'):
+        try:
+            num = float(value.replace('억원', ''))
+            return int(num * 100000000)
+        except ValueError:
+            return 0
+    try:
+        return int(value)
+    except ValueError:
+        return 0
+
