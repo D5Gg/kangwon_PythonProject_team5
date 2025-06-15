@@ -282,13 +282,29 @@
             <div class="card mb-4">
               <div class="card-header">
                 <i class="fas fa-chart-area me-1"></i>
-                Area Chart Example
+                거래량/거래대금 분포 (상위 5구간)
               </div>
               <div class="card-body">
-                <canvas id="myAreaChart" width="100%" height="30"></canvas>
+                <div class="sort-options">
+                  <label><input type="radio" name="areaType" value="volume" checked>거래량 분포</label>
+                  <label><input type="radio" name="areaType" value="money">거래대금 분포</label>
+                </div>
+                <canvas id="myAreaChart" width="600" height="260" style="min-height:220px;"></canvas>
+                <script id="areaBinData" type="application/json">
+                  {
+                    "volume": {
+                      "labels": {{ volume_bin_labels_json|safe }},
+                      "counts": {{ volume_bin_counts_json|safe }}
+                    },
+                    "money": {
+                      "labels": {{ value_bin_labels_json|safe }},
+                      "counts": {{ value_bin_counts_json|safe }}
+                    }
+                  }
+                </script>
               </div>
               <div class="card-footer small text-muted">
-                Updated yesterday at 11:59 PM
+                5구간: 최대값 기준 (x, 4/5x, 3/5x, 2/5x, 1/5x)
               </div>
             </div>
             <div class="row">
@@ -360,7 +376,7 @@
     <script src="assets/demo/chart-bar-demo.js"></script>
     <script src="assets/demo/chart-pie-demo.js"></script>
     <script>
-    console.log('stocks:', `{% for stock in stocks %}{{ stock.stock_name }}, {% endfor %}`); // 데이터 확인용
+    // stockData 생성 (막대/파이 차트용)
     const stockData = [
     {% for stock in stocks %}
         {
@@ -370,7 +386,6 @@
         },
     {% endfor %}
     ];
-    console.log('stockData:', stockData);
     </script>
     <script src="{% static 'js/draw-graph.js' %}"></script>
   </body>

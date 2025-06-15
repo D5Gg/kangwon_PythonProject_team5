@@ -1,3 +1,15 @@
+// 숫자 단축 함수
+function formatEok(value) {
+    if (Math.abs(value) >= 100000000) {
+        // 소수점 없이 정수로만 억 단위
+        return Math.round(value / 100000000).toLocaleString() + '억';
+    }
+    if (Math.abs(value) >= 10000) {
+        return Math.round(value / 10000).toLocaleString() + '만';
+    }
+    return value.toLocaleString();
+}
+
 function getTop10(type) {
     let sorted = [...stockData];
     if (type === 'money') {
@@ -57,17 +69,26 @@ const barChart = new Chart(ctx, {
                 text: '거래대금 TOP10',
                 font: { size: 22 },
             },
-            tooltip: { enabled: true },
+            tooltip: {
+                enabled: true,
+                callbacks: {
+                    label: function(context) {
+                        const label = context.dataset.label || '';
+                        const value = context.parsed.y ?? context.parsed;
+                        return label + ': ' + formatEok(value);
+                    }
+                }
+            },
         },
         scales: {
-            y: {
-                beginAtZero: true,
+            yAxes: [{
                 ticks: {
                     callback: function (value) {
-                        return value.toLocaleString();
+                        return formatEok(value);
                     },
                 },
-            },
+                beginAtZero: true,
+            }],
         },
     },
 });
@@ -115,30 +136,120 @@ function drawPieChart(type) {
                         text: type === 'money' ? '거래대금 TOP10' : '거래량 TOP10',
                         font: { size: 22 },
                     },
-                    tooltip: { enabled: true },
+                    tooltip: {
+                        enabled: true,
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed;
+                                return label + ': ' + formatEok(value);
+                            }
+                        }
+                    },
                 },
             },
         });
     }
 }
 
-// 최초 실행 (bar + pie)
-drawChart('money');
-drawPieChart('money');
+// AREA CHART LOGIC (분포)
+let areaChart = null;
+function getAreaBinData(type) {
+    const areaBinData = document.getElementById('areaBinData');
+    if (!areaBinData) return { labels: [], counts: [] };
+    const data = JSON.parse(areaBinData.textContent);
+    console.log('areaBinData:', data[type]); // 데이터 콘솔 출력
+    return data[type] || { labels: [], counts: [] };
+}
+function drawAreaChart(type) {
+    const { labels, counts } = getAreaBinData(type);
+    const ctx = document.getElementById('myAreaChart').getContext('2d');
+    const color = type === 'money' ? 'rgba(52, 152, 219, 0.5)' : 'rgba(46, 204, 113, 0.5)';
+    if (areaChart) {
+        areaChart.data.labels = labels.length ? labels : ['구간1','구간2','구간3','구간4','구간5'];
+        areaChart.data.datasets[0].data = counts.length ? counts : [0,0,0,0,0];
+        areaChart.data.datasets[0].label = type === 'money' ? '거래대금 분포(개수)' : '거래량 분포(개수)';
+        areaChart.options.plugins.title.text = type === 'money' ? '거래대금 분포(상위 5구간)' : '거래량 분포(상위 5구간)';
+        areaChart.data.datasets[0].backgroundColor = color;
+        areaChart.update();
+    } else {
+        areaChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.length ? labels : ['구간1','구간2','구간3','구간4','구간5'],
+                datasets: [
+                    {
+                        label: type === 'money' ? '거래대금 분포(개수)' : '거래량 분포(개수)',
+                        data: counts.length ? counts : [0,0,0,0,0],
+                        fill: true,
+                        backgroundColor: color,
+                        borderColor: color.replace('0.5', '1'),
+                        tension: 0.4,
+                        pointRadius: 5,
+                        pointBackgroundColor: color.replace('0.5', '1'),
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: type === 'money' ? '거래대금 분포(상위 5구간)' : '거래량 분포(상위 5구간)',
+                        font: { size: 22 },
+                    },
+                    tooltip: {
+                        enabled: true,
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.dataset.label || '';
+                                const value = context.parsed.y ?? context.parsed;
+                                return label + ': ' + formatEok(value);
+                            }
+                        }
+                    },
+                },
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            callback: function (value) {
+                                return formatEok(value);
+                            },
+                        },
+                        beginAtZero: true,
+                    }],
+                },
+            },
+        });
+    }
+}
 
-// 독립적인 라디오 그룹 처리 (HTML과 name 일치)
-const barDefault = document.querySelector('input[name="sortType"]:checked');
-const pieDefault = document.querySelector('input[name="pieSortType"]:checked');
-if (barDefault) drawChart(barDefault.value);
-if (pieDefault) drawPieChart(pieDefault.value);
-
-document.querySelectorAll('input[name="sortType"]').forEach((radio) => {
-    radio.addEventListener('change', function () {
-        drawChart(this.value);
+document.addEventListener('DOMContentLoaded', function() {
+    // 최초 실행 (bar + pie)
+    drawChart('money');
+    drawPieChart('money');
+    // 독립적인 라디오 그룹 처리 (HTML과 name 일치)
+    const barDefault = document.querySelector('input[name="sortType"]:checked');
+    const pieDefault = document.querySelector('input[name="pieSortType"]:checked');
+    if (barDefault) drawChart(barDefault.value);
+    if (pieDefault) drawPieChart(pieDefault.value);
+    document.querySelectorAll('input[name="sortType"]').forEach((radio) => {
+        radio.addEventListener('change', function () {
+            drawChart(this.value);
+        });
     });
-});
-document.querySelectorAll('input[name="pieSortType"]').forEach((radio) => {
-    radio.addEventListener('change', function () {
-        drawPieChart(this.value);
+    document.querySelectorAll('input[name="pieSortType"]').forEach((radio) => {
+        radio.addEventListener('change', function () {
+            drawPieChart(this.value);
+        });
+    });
+    // area chart
+    const areaDefault = document.querySelector('input[name="areaType"]:checked');
+    if (areaDefault) drawAreaChart(areaDefault.value);
+    document.querySelectorAll('input[name="areaType"]').forEach((radio) => {
+        radio.addEventListener('change', function () {
+            drawAreaChart(this.value);
+        });
     });
 });

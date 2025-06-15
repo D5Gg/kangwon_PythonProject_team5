@@ -8,6 +8,7 @@ from .utils import get_kospi_basic_info, get_kospi_realtime_data
 from django.http import JsonResponse
 import requests
 import logging
+import json
 
 # crawling.py에 있는 함수를 임포트합니다.
 # index 앱 내에 crawling.py가 있다면 상대 경로 임포트
@@ -30,10 +31,80 @@ def index(request):
 
 
 def charts(request):
-    # StockListView와 동일하게 거래량 내림차순 200개(혹은 전체)로 통일
-    stocks = StockModel.objects.all().order_by('-accumulated_trading_volume')[:200]
-    print(stocks)  # 데이터가 실제로 있는지 확인
-    return render(request, "index/charts.html", {"stocks": stocks})
+    # 모든 주식 데이터 (차트, 표 등에서 사용)
+    stocks = StockModel.objects.all().order_by('-accumulated_trading_volume')
+
+    # 거래량/거래대금 numeric 변환
+    def to_int(val):
+        try:
+            return int(str(val).replace(',', ''))
+        except Exception:
+            return 0
+    from .stockModel import parse_krw_hangeul
+    volumes = [to_int(s.accumulated_trading_volume) for s in stocks]
+    values = [parse_krw_hangeul(s.accumulated_trading_value_krw_hangeul) for s in stocks]
+
+    def get_bin_distribution(data):
+        if not data or max(data) == 0:
+            return [0]*5, [0]*5, [0]*5
+        x = max(data)
+        bin_edges = [x, 4*x//5, 3*x//5, 2*x//5, x//5, 0]
+        bin_counts = [0]*5
+        for v in data:
+            if v > bin_edges[1]:
+                bin_counts[0] += 1
+            elif v > bin_edges[2]:
+                bin_counts[1] += 1
+            elif v > bin_edges[3]:
+                bin_counts[2] += 1
+            elif v > bin_edges[4]:
+                bin_counts[3] += 1
+            else:
+                bin_counts[4] += 1
+        total = sum(bin_counts)
+        bin_percents = [round((c/total)*100, 2) if total else 0 for c in bin_counts]
+        bin_labels = [
+            f'>{bin_edges[1]:,}',
+            f'{bin_edges[2]+1:,}~{bin_edges[1]:,}',
+            f'{bin_edges[3]+1:,}~{bin_edges[2]:,}',
+            f'{bin_edges[4]+1:,}~{bin_edges[3]:,}',
+            f'≤{bin_edges[4]:,}'
+        ]
+        return bin_labels, bin_percents, bin_counts
+
+    volume_bin_labels, volume_bin_percents, volume_bin_counts = get_bin_distribution(volumes)
+    value_bin_labels, value_bin_percents, value_bin_counts = get_bin_distribution(values)
+
+    # 거래량 1위 종목 추출 (기존 area chart dummy)
+    top_stock = stocks.first() if stocks else None
+    area_labels = [f"{i+1}" for i in range(10)]
+    area_values = []
+    area_name = top_stock.stock_name if top_stock else "-"
+    if top_stock:
+        try:
+            price = float(str(top_stock.close_price).replace(',', ''))
+        except Exception:
+            price = 0
+        area_values = [price for _ in range(10)]
+    else:
+        area_values = [0 for _ in range(10)]
+    area_chart_data = {
+        "labels": area_labels,
+        "values": area_values,
+        "name": area_name,
+    }
+
+    print("volume_bin_counts:", volume_bin_counts)
+    print("value_bin_counts:", value_bin_counts)
+
+    return render(request, "index/charts.html", {
+        "stocks": stocks,
+        "area_chart_data": area_chart_data,
+        "volume_bin_labels_json": json.dumps(volume_bin_labels),
+        "volume_bin_counts_json": json.dumps(volume_bin_counts),
+        "value_bin_labels_json": json.dumps(value_bin_labels),
+        "value_bin_counts_json": json.dumps(value_bin_counts),
+    })
 
 def error_401(request):
     return render(request, 'index/401.html')
