@@ -8,28 +8,36 @@ from .utils import get_kospi_basic_info, get_kospi_realtime_data
 from django.http import JsonResponse
 import requests
 import logging
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+from .utils import get_stock_code_by_name  # 종목 이름 → 코드 변환 함수
+import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
+
+
 
 # crawling.py에 있는 함수를 임포트합니다.
-# index 앱 내에 crawling.py가 있다면 상대 경로 임포트
-from .crawling import get_and_display_stocks_data_and_save # 이름 변경 제안
+from .crawling import get_and_display_stocks_data_and_save
 
 # 기존 뷰 함수들...
 def index(request):
-    if request.method == 'POST':
-        content = request.POST.get('content')
-        if content:
-            Note.objects.create(content=content)
-            return redirect('index')
+    # This 'index' view is largely superseded by StockListView for rendering index.html
+    # You might want to consider removing it or renaming it if its purpose changes.
     notes = Note.objects.all().order_by('-created_at')
-    # index.html이 Note와 StockModel 데이터를 동시에 보여줘야 한다면
-    # 아래 StockListView의 로직을 여기에 통합해야 합니다.
-    # 하지만 현재 StockListView가 index.html을 직접 렌더링하므로,
-    # 'notes' 데이터를 여기에 전달하는 것은 이 'index' 뷰가 아니라 StockListView에 통합되어야 할 수 있습니다.
-    # 일단은 기존 index 뷰는 Note 관련 기능만 유지합니다.
     return render(request, 'index/index.html', {'notes': notes})
 
 
 def charts(request):
+    # This view is not directly used for the charts on index.html,
+    # but could be for a dedicated charts page if needed.
     return render(request, 'index/charts.html')
 
 def error_401(request):
@@ -59,6 +67,9 @@ def register(request):
 def tables(request):
     return render(request, 'index/tables.html')
 
+def stock_detail(request):
+    return render(request, 'index/stock_detail.html')
+
 
 # 주식 목록을 보여주는 클래스 기반 뷰 (주요 변경 사항)
 class StockListView(ListView):
@@ -67,10 +78,8 @@ class StockListView(ListView):
     context_object_name = 'stocks_page' # 템플릿 변수 이름을 'stocks_page'로 통일
     paginate_by = 20 # 한 페이지에 20개씩 보여주기
 
-    # 이 메소드가 뷰가 렌더링되기 전에 호출됩니다.
     def dispatch(self, request, *args, **kwargs):
         # 페이지가 로드될 때마다 최신 주식 데이터를 가져와 DB에 저장/업데이트
-        # get_and_display_stocks_data_and_save는 API 호출 및 DB 저장 로직만 수행하도록 crawling.py에서 수정해야 합니다.
         get_and_display_stocks_data_and_save()
         return super().dispatch(request, *args, **kwargs)
 
@@ -80,12 +89,48 @@ class StockListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # 기존 index 뷰의 Note 데이터를 StockListView에 통합 (선택 사항)
-        # 만약 index.html에서 Note 데이터도 함께 보여줘야 한다면
+        
+        # --- KOSPI Basic Data for Area Chart ---
+        kospi_data = get_kospi_basic_info()
+        close_price = 0
+        if kospi_data and "closePrice" in kospi_data:
+            try:
+                close_price = float(kospi_data["closePrice"].replace(",", ""))
+            except ValueError:
+                close_price = 0
+
+        # Generate dummy data for KOSPI chart labels and values
+        now = datetime.now()
+        labels = []
+        values = []
+        for i in range(9, 0, -1):
+            past_time = (now - timedelta(seconds=i * 5)).strftime("%H:%M:%S")
+            labels.append(past_time)
+            values.append(close_price)  # Use the fetched current price as dummy
+        labels.append(now.strftime("%H:%M:%S"))
+        values.append(close_price)
+        
+        context['basic_data'] = {
+            "labels": labels,
+            "values": values
+        }
+
+        # --- Industry Data for Bar Chart ---
+        industry_url = "https://m.stock.naver.com/api/stocks/industry?page=1&pageSize=20"
+        try:
+            response = requests.get(industry_url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            # Pass the raw 'groups' data, as chart-bar-demo.js expects it.
+            context['industry_data'] = data
+        except Exception as e:
+            logging.error(f"Error fetching or parsing industry data: {e}")
+            context['industry_data'] = {"groups": []} # Ensure 'groups' key is always present
+        
+        # Existing Note data
         context['notes'] = Note.objects.all().order_by('-created_at')
+        
         return context
-    
-from django.http import JsonResponse
 
 def kospi_basic_api(request):
     """KOSPI 기본 정보를 JSON으로 반환합니다."""
@@ -111,98 +156,232 @@ def kospi_realtime_api(request):
     except Exception as e:
         return JsonResponse({"error": f"Exception occurred: {str(e)}"}, status=500)
 
-
-# def kospi_data_page(request):
-#     raw_data = get_kospi_basic_info()
-#     if not raw_data or 'items' not in raw_data:
-#         basic_data = {"dates": [], "values": []}
-#     else:
-#         items = raw_data['items']
-#         dates = [item['date'] for item in items]
-#         values = [float(item['closePrice'].replace(',', '')) for item in items]
-#         basic_data = {
-#             "dates": dates,
-#             "values": values
-#         }
-#     return render(request, 'stock_app/kospi_dashboard.html', {'basic_data': basic_data})
-from datetime import datetime, timedelta
-
-def kospi_data_page(request):
-    kospi_data = get_kospi_basic_info()
-
-    if kospi_data:
-        close_price_str = kospi_data.get("closePrice", "0").replace(",", "")
-        try:
-            close_price = float(close_price_str)
-        except ValueError:
-            close_price = 0
-    else:
-        close_price = 0
-
-    # ✅ 현재 시간 기준으로 과거 9개 더미 데이터 생성
-    now = datetime.now()
-    labels = []
-    values = []
-
-    for i in range(9, 0, -1):
-        past_time = (now - timedelta(seconds=i * 5)).strftime("%H:%M:%S")
-        labels.append(past_time)
-        values.append(close_price)  # 더미 값으로 현재 값 재사용
-
-    # ✅ 마지막은 실제 데이터 시간
-    labels.append(now.strftime("%H:%M:%S"))
-    values.append(close_price)
-
-    basic_data = {
-        "labels": labels,
-        "values": values
-    }
-
-    return render(request, 'index/charts.html', {'basic_data': basic_data})
-def industry_chart_page(request):
+# (기존 get_stock_code 함수는 동일하게 유지)
+def get_stock_code(stock_name):
+    import re
+    from bs4 import BeautifulSoup
     import requests
-    industry_url = "https://m.stock.naver.com/api/stocks/industry?page=1&pageSize=20"
-    try:
-        response = requests.get(industry_url, timeout=10)
-        response.raise_for_status()
-        data = response.json()
 
-        # groups 키에 산업별 리스트가 있음
-        groups = data.get("groups", [])
+    print(f"검색어: {stock_name}")
 
-        # 각 그룹 이름과 changeRate 추출, changeRate를 float로 변환
-        industry_labels = []
-        industry_values = []
-        for g in groups:
-            industry_labels.append(g.get("name", ""))
-            try:
-                # !!! 이 부분이 중요합니다. API 응답에서 'changeRate'가 없을 수 있습니다.
-                # 'changeRate'가 숫자여야 하는데 문자열이거나 없을 경우를 대비해야 합니다.
-                change_rate_str = g.get("changeRate", "0")
-                industry_values.append(float(change_rate_str))
-            except ValueError:
-                # 문자열을 float로 변환할 수 없을 때 0.0을 추가
-                industry_values.append(0.0)
+    if stock_name.isdigit() and len(stock_name) == 6:
+        return stock_name  # 이미 코드면 바로 반환
+        
 
-        industry_data = {
-            "labels": industry_labels,
-            "values": industry_values, # 이곳이 항상 배열이 되어야 합니다.
-        }
-    except Exception as e:
-        print(f"Error fetching or parsing industry data: {e}")
-        industry_data = {"labels": [], "values": []} # 오류 시에도 배열로 초기화
-
-    basic_data = {
-        "labels": ["2023-01-01", "2023-01-02", "2023-01-03", "2023-01-04", "2023-01-05"],
-        "values": [2200, 2210, 2190, 2230, 2220],
+    search_url = f"https://finance.naver.com/search/search.naver?query={stock_name}"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
     }
 
-    stocks_page = []  # 필요하면 실제 데이터 넣기
+    try:
+        response = requests.get(search_url, headers=headers, timeout=5)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
 
-    print("DEBUG: industry_data generated in Django view:", industry_data) # 이 줄 추가
+        # 종목 코드가 들어 있는 링크 찾기
+        a_tags = soup.select('a')  # 모든 a 태그를 순회
+        for a in a_tags:
+            href = a.get('href', '')
+            if '/item/main.naver?code=' in href:
+                match = re.search(r'code=(\d{6})', href)
+                if match:
+                    return match.group(1)
 
-    return render(request, "index/industry_chart.html", {
-        "industry_data": industry_data,
-        "basic_data": basic_data,
-        "stocks_page": stocks_page,
-    })
+    except requests.RequestException as e:
+        print(f"종목 코드 가져오기 오류: {e}")
+
+    return None
+
+def get_stock_info(code):
+    url = f"https://finance.naver.com/item/main.naver?code={code}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/114.0.0.0 Safari/537.36"
+        )
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # 1. 주식명
+        stock_name_tag = soup.select_one("div.wrap_company h2 a")
+        stock_name = stock_name_tag.text.strip() if stock_name_tag else "알 수 없음"
+
+        # 2. 현재가
+        current_price_tag = soup.select_one("p.no_today span.blind")
+        current_price = current_price_tag.text.strip().replace(",", "") if current_price_tag else "N/A"
+
+        # 3. 전일비 및 등락률
+        diff_tags = soup.select("p.no_exday span.blind")
+        if len(diff_tags) >= 2:
+            previous_day_change = diff_tags[0].text.strip().replace(",", "")
+            fluctuation_rate = diff_tags[1].text.strip().replace("%", "").replace("상승", "").replace("하락", "")
+        else:
+            previous_day_change = fluctuation_rate = "N/A"
+
+        # 4. 전일/고가/저가 (rate_info에서)
+        last_price = soup.select_one("table.no_info td.first span.blind")
+        high_price = soup.select_one("table.no_info td:nth-of-type(2) span.blind")
+        low_price = soup.select_one("table.no_info tr:nth-of-type(2) td:nth-of-type(2) span.blind")
+
+        # 5. 거래량
+        trade_volume_tag = soup.select_one("table.no_info td:nth-of-type(3) span.blind")
+
+    
+
+        return {
+            "stock_name": stock_name,
+            "current_price": current_price,
+            "previous_day_change": previous_day_change,
+            "fluctuation_rate": fluctuation_rate,
+            "last_price": last_price.text.strip().replace(",", "") if last_price else "N/A",
+            "high_price": high_price.text.strip().replace(",", "") if high_price else "N/A",
+            "low_price": low_price.text.strip().replace(",", "") if low_price else "N/A",
+            "trade_volume": trade_volume_tag.text.strip().replace(",", "") if trade_volume_tag else "N/A",
+        }
+
+    except requests.exceptions.RequestException as e:
+        print(f"요청 오류: {e}")
+        return {}
+
+def get_daily_stock_prices(code, pages=10): # 최근 10페이지의 데이터를 가져온다고 가정
+    prices = []
+    for page in range(1, pages + 1):
+        url = f"https://finance.naver.com/item/sise_day.nhn?code={code}&page={page}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        try:
+            response = requests.get(url, headers=headers, timeout=5)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # 일별 시세 테이블 파싱
+            table = soup.find('table', class_='type2')
+            if table:
+                rows = table.find_all('tr')
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) >= 7: # 날짜, 종가, 전일비, 시가, 고가, 저가, 거래량
+                        date = cols[0].text.strip()
+                        if date.startswith('2'): # 날짜 형식 확인 (예: 2023.01.01)
+                            close_price = cols[1].text.strip().replace(',', '')
+                            prices.append({'date': date, 'close_price': int(close_price)})
+            else:
+                break # 더 이상 테이블이 없으면 종료
+
+        except requests.exceptions.RequestException as e:
+            print(f"일별 시세 가져오기 오류 (code: {code}, page: {page}): {e}")
+            break
+    
+    # 날짜 순서대로 정렬 (가장 오래된 날짜가 먼저 오도록)
+    prices.sort(key=lambda x: x['date'])
+    return prices
+
+
+def search_stock_api(request):
+    stock_name = request.GET.get('stock_name')
+    
+    if not stock_name:
+        return JsonResponse({'error': '주식 이름을 입력해주세요.'}, status=400)
+
+    # 만약 6자리 숫자이면 그대로 종목 코드로 사용
+    if stock_name.isdigit() and len(stock_name) == 6:
+        return JsonResponse({'code': stock_name})
+
+    # 한글 이름이면 종목코드로 변환 시도
+    code = get_stock_code_by_name(stock_name)
+    if code:
+        return JsonResponse({'code': code})
+    else:
+        return JsonResponse({'error': '해당 종목을 찾을 수 없습니다.'}, status=404)
+
+def stock_detail(request):
+    stock_code = request.GET.get('code')
+    stock_info = {}
+    daily_prices = []
+
+    if stock_code:
+        stock_info = get_stock_info(stock_code)
+        daily_prices = get_daily_stock_prices(stock_code)  # 예: 리스트나 DataFrame
+
+    # daily_prices 가 리스트면 DataFrame으로 변환
+    if daily_prices and isinstance(daily_prices, list):
+        df = pd.DataFrame(daily_prices)
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
+    elif isinstance(daily_prices, pd.DataFrame):
+        df = daily_prices.copy()
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'])
+            df.set_index('date', inplace=True)
+    else:
+        df = pd.DataFrame()  # 빈 데이터프레임 fallback
+    #체크
+    print(f"daily_prices: {daily_prices[:5] if daily_prices else 'No data'}") # 처음 5개 항목만 출력
+    if not df.empty:
+        print(f"DataFrame columns: {df.columns.tolist()}")
+        print(f"First 5 rows of df:\n{df.head()}")
+    else:
+        print("DataFrame 'df' is empty.")
+    #체크
+    # 최소한 'close' 컬럼은 있어야 함
+    if not df.empty and 'close_price' in df.columns:
+        closing_prices = df[['close_price']]
+        
+        # 정규화
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        scaled_data = scaler.fit_transform(closing_prices)
+
+        # create_dataset 함수 정의
+        def create_dataset(data, time_step=60):
+            X, Y = [], []
+            for i in range(len(data) - time_step - 1):
+                X.append(data[i:(i + time_step), 0])
+                Y.append(data[i + time_step, 0])
+            return np.array(X), np.array(Y)
+
+        time_step = 60
+        X, y = create_dataset(scaled_data, time_step)
+        X = X.reshape(X.shape[0], X.shape[1], 1)
+
+        # LSTM 모델 생성 및 학습 (에포크 적게 설정 권장, 실서비스면 미리 학습한 모델 로드 추천)
+        model = Sequential()
+        model.add(LSTM(50, return_sequences=True, input_shape=(time_step, 1)))
+        model.add(LSTM(50, return_sequences=False))
+        model.add(Dense(25))
+        model.add(Dense(1))
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        model.fit(X, y, epochs=1, batch_size=1, verbose=0)
+
+        # 예측
+        predictions = model.predict(X)
+        predictions = scaler.inverse_transform(predictions)
+
+        # 실제 값 (역정규화)
+        actual = scaler.inverse_transform(y.reshape(-1, 1))
+
+        # 결과 시각화 이미지를 base64로 변환해서 템플릿에 넘기기
+        plt.figure(figsize=(10,5))
+        plt.plot(actual, label='Actual Price')
+        plt.plot(predictions, label='Predicted Price')
+        plt.legend()
+
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        plt.close()
+
+    else:
+        image_base64 = None
+
+    context = {
+        'stock_info': stock_info,
+        'stock_code': stock_code,
+        'daily_prices': daily_prices,
+        'lstm_plot': image_base64,
+    }
+    return render(request, 'index/stock_detail.html', context)
